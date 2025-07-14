@@ -2,41 +2,67 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Bau Cua Game Design System - Vietnamese Traditional Colors */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Game Background - Deep Blue Ocean */
+    --background: 220 100% 20%;
+    --foreground: 0 0% 100%;
 
+    /* Card & UI Elements */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 220 50% 20%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 220 50% 20%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Primary - Gold/Yellow for highlights */
+    --primary: 45 100% 50%;
+    --primary-foreground: 220 50% 20%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Secondary - Light Blue for secondary elements */
+    --secondary: 200 100% 70%;
+    --secondary-foreground: 220 50% 20%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Game Colors */
+    --game-blue: 220 100% 25%;
+    --game-light-blue: 200 100% 70%;
+    --game-gold: 45 100% 50%;
+    --game-silver: 0 0% 85%;
+    --game-green: 120 100% 40%;
+    --game-red: 0 100% 60%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Gradients */
+    --gradient-ocean: linear-gradient(135deg, hsl(220, 100%, 30%) 0%, hsl(200, 100%, 20%) 100%);
+    --gradient-button: linear-gradient(135deg, hsl(45, 100%, 60%) 0%, hsl(35, 100%, 50%) 100%);
+    --gradient-dice: linear-gradient(135deg, hsl(0, 0%, 95%) 0%, hsl(0, 0%, 85%) 100%);
+    --gradient-glow: radial-gradient(circle, hsl(45, 100%, 60%) 0%, transparent 70%);
+
+    /* Shadows & Effects */
+    --shadow-card: 0 10px 25px -5px hsl(220, 100%, 10%);
+    --shadow-dice: 0 15px 35px -10px hsl(220, 60%, 15%);
+    --shadow-glow: 0 0 30px hsl(45, 100%, 60%);
+    --shadow-inner: inset 0 2px 8px hsl(220, 30%, 10%);
+
+    /* Animations */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+    --muted: 220 50% 85%;
+    --muted-foreground: 220 50% 40%;
+
+    --accent: 200 100% 70%;
+    --accent-foreground: 220 50% 20%;
 
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 220 50% 80%;
+    --input: 220 50% 90%;
+    --ring: 45 100% 50%;
 
-    --radius: 0.5rem;
+    --radius: 1rem;
 
     --sidebar-background: 0 0% 98%;
 
