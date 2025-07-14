@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Volume2, RotateCcw, Home } from 'lucide-react';
+import { Volume2, Home } from 'lucide-react';
 
 // Import animal images
 import crabImg from '@/assets/crab.png';
@@ -24,11 +24,6 @@ interface DiceResult {
   animating: boolean;
 }
 
-interface Bet {
-  animal: string;
-  amount: number;
-}
-
 const animals: Animal[] = [
   { id: 'crab', name: 'Crab', image: crabImg, vietnamese: 'Cua' },
   { id: 'fish', name: 'Fish', image: fishImg, vietnamese: 'Cá' },
@@ -39,113 +34,86 @@ const animals: Animal[] = [
 ];
 
 const BauCuaGame: React.FC = () => {
-  const [coins, setCoins] = useState(10000);
-  const [bets, setBets] = useState<Record<string, number>>({});
   const [diceResults, setDiceResults] = useState<DiceResult[]>([
     { face: 'crab', animating: false },
     { face: 'fish', animating: false },
     { face: 'shrimp', animating: false }
   ]);
   const [isRolling, setIsRolling] = useState(false);
-  const [gamePhase, setGamePhase] = useState<'betting' | 'rolling' | 'result'>('betting');
-  const [winningAnimals, setWinningAnimals] = useState<string[]>([]);
+  const [gamePhase, setGamePhase] = useState<'ready' | 'rolling' | 'result'>('ready');
+  const [waitingForTap, setWaitingForTap] = useState(false);
   
-  // Secret control state
+  // Fixed image control state
+  const [tapControlActive, setTapControlActive] = useState(false);
   const [tapSequence, setTapSequence] = useState<number[]>([]);
-  const [secretMode, setSecretMode] = useState(false);
-  const [lastTapTime, setLastTapTime] = useState(0);
   const gameAreaRef = useRef<HTMLDivElement>(null);
   
   const { toast } = useToast();
 
-  // Secret tap pattern: tap 3 times quickly in top-left, then 2 times in center
-  const SECRET_PATTERN = [1, 1, 1, 2, 2]; // 1 = top-left, 2 = center
-  const TAP_TIMEOUT = 1000; // Reset sequence after 1 second of inactivity
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (tapSequence.length > 0) {
-        setTapSequence([]);
-      }
-    }, TAP_TIMEOUT);
-
-    return () => clearTimeout(timer);
-  }, [lastTapTime, tapSequence.length]);
-
-  const handleSecretTap = (e: React.MouseEvent) => {
-    if (!gameAreaRef.current) return;
-    
-    const rect = gameAreaRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const width = rect.width;
-    const height = rect.height;
-    
-    let zone = 0;
-    
-    // Determine tap zone
-    if (x < width * 0.3 && y < height * 0.3) {
-      zone = 1; // top-left
-    } else if (x > width * 0.3 && x < width * 0.7 && y > height * 0.3 && y < height * 0.7) {
-      zone = 2; // center
-    }
-    
-    if (zone > 0) {
-      const now = Date.now();
-      setLastTapTime(now);
-      
-      const newSequence = [...tapSequence, zone];
-      setTapSequence(newSequence);
-      
-      // Check if pattern matches
-      if (newSequence.length === SECRET_PATTERN.length) {
-        const matches = newSequence.every((val, index) => val === SECRET_PATTERN[index]);
-        if (matches) {
-          setSecretMode(true);
-          setTapSequence([]);
-          toast({
-            title: "🎰 Chế độ may mắn kích hoạt!",
-            description: "Xác suất thắng đã được tăng lên!",
-          });
-        } else {
-          setTapSequence([]);
-        }
-      } else if (newSequence.length > SECRET_PATTERN.length) {
-        setTapSequence([]);
-      }
-    }
+  // Fixed image sets for different tap positions
+  const FIXED_SETS: Record<number, string[]> = {
+    1: ['crab', 'crab', 'crab'], // Tap below first image (position 1)
+    2: ['fish', 'fish', 'fish'], // Tap below second image (position 2)
+    6: ['gourd', 'gourd', 'gourd'] // Tap below sixth image (position 6)
   };
+  
+  // Activation sequence: tap positions 2, 1, 6, 1
+  const ACTIVATION_SEQUENCE = [2, 1, 6, 1];
 
-  const placeBet = (animalId: string, amount: number) => {
-    if (gamePhase !== 'betting') return;
-    if (coins < amount) {
-      toast({
-        title: "Không đủ xu!",
-        description: "Bạn không có đủ xu để đặt cược.",
-        variant: "destructive"
-      });
+  const handleAnimalTap = (position: number) => {
+    if (waitingForTap && tapControlActive) {
+      // Use fixed set if available, otherwise random
+      let results: DiceResult[];
+      if (FIXED_SETS[position]) {
+        results = FIXED_SETS[position].map(face => ({ face, animating: false }));
+        toast({
+          title: `🎯 Kết quả cố định ${position}`,
+          description: "Đã sử dụng kết quả được thiết lập trước!",
+        });
+      } else {
+        // Random result if position not in fixed sets
+        const animalIds = animals.map(a => a.id);
+        results = Array.from({ length: 3 }, () => ({
+          face: animalIds[Math.floor(Math.random() * animalIds.length)],
+          animating: false
+        }));
+      }
+      
+      setDiceResults(results);
+      setWaitingForTap(false);
+      setGamePhase('result');
+      
+      setTimeout(() => {
+        setGamePhase('ready');
+      }, 3000);
       return;
     }
 
-    setBets(prev => ({
-      ...prev,
-      [animalId]: (prev[animalId] || 0) + amount
-    }));
-    setCoins(prev => prev - amount);
+    // Handle activation sequence
+    const newSequence = [...tapSequence, position];
+    setTapSequence(newSequence);
+    
+    // Check if activation sequence is complete
+    if (newSequence.length === ACTIVATION_SEQUENCE.length) {
+      const matches = newSequence.every((val, index) => val === ACTIVATION_SEQUENCE[index]);
+      if (matches) {
+        setTapControlActive(true);
+        setTapSequence([]);
+        toast({
+          title: "🎮 Chế độ điều khiển kích hoạt!",
+          description: "Bây giờ bạn có thể điều khiển kết quả bằng cách chạm vào các vị trí!",
+        });
+      } else {
+        // Reset if sequence doesn't match
+        if (newSequence.length >= ACTIVATION_SEQUENCE.length) {
+          setTapSequence([]);
+        }
+      }
+    }
   };
 
   const rollDice = () => {
-    if (gamePhase !== 'betting') return;
-    
-    const totalBet = Object.values(bets).reduce((sum, bet) => sum + bet, 0);
-    if (totalBet === 0) {
-      toast({
-        title: "Chưa đặt cược!",
-        description: "Hãy đặt cược trước khi lắc xúc xắc.",
-        variant: "destructive"
-      });
-      return;
-    }
+    if (gamePhase !== 'ready') return;
 
     setIsRolling(true);
     setGamePhase('rolling');
@@ -154,89 +122,48 @@ const BauCuaGame: React.FC = () => {
     setDiceResults(prev => prev.map(dice => ({ ...dice, animating: true })));
     
     setTimeout(() => {
-      // Generate results with secret mode influence
-      const results: DiceResult[] = [];
-      const animalIds = animals.map(a => a.id);
-      
-      for (let i = 0; i < 3; i++) {
-        let randomAnimal;
-        
-        if (secretMode && Math.random() < 0.7) {
-          // In secret mode, 70% chance to favor player's bets
-          const playerBets = Object.keys(bets).filter(key => bets[key] > 0);
-          if (playerBets.length > 0) {
-            randomAnimal = playerBets[Math.floor(Math.random() * playerBets.length)];
-          } else {
-            randomAnimal = animalIds[Math.floor(Math.random() * animalIds.length)];
-          }
-        } else {
-          randomAnimal = animalIds[Math.floor(Math.random() * animalIds.length)];
-        }
-        
-        results.push({ face: randomAnimal, animating: false });
-      }
-      
-      setDiceResults(results);
-      setIsRolling(false);
-      setGamePhase('result');
-      
-      // Calculate winnings
-      const winCounts: Record<string, number> = {};
-      results.forEach(result => {
-        winCounts[result.face] = (winCounts[result.face] || 0) + 1;
-      });
-      
-      const winners = Object.keys(winCounts);
-      setWinningAnimals(winners);
-      
-      let totalWinnings = 0;
-      Object.entries(bets).forEach(([animal, betAmount]) => {
-        const count = winCounts[animal] || 0;
-        if (count > 0) {
-          const payout = betAmount * (count + 1); // 1:1 base + bonus for multiple dice
-          totalWinnings += payout;
-        }
-      });
-      
-      if (totalWinnings > 0) {
-        setCoins(prev => prev + totalWinnings);
+      if (tapControlActive) {
+        // Wait for tap if control is active
+        setWaitingForTap(true);
+        setIsRolling(false);
         toast({
-          title: "🎉 Chúc mừng!",
-          description: `Bạn thắng ${totalWinnings} xu!`,
+          title: "👆 Chờ chạm",
+          description: "Chạm vào vị trí bên dưới hình ảnh để chọn kết quả!",
         });
       } else {
-        toast({
-          title: "😔 Không may",
-          description: "Hãy thử lại lần sau!",
-        });
+        // Normal random result
+        const animalIds = animals.map(a => a.id);
+        const results: DiceResult[] = Array.from({ length: 3 }, () => ({
+          face: animalIds[Math.floor(Math.random() * animalIds.length)],
+          animating: false
+        }));
+        
+        setDiceResults(results);
+        setIsRolling(false);
+        setGamePhase('result');
+        
+        setTimeout(() => {
+          setGamePhase('ready');
+        }, 3000);
       }
-      
-      // Reset for next round
-      setTimeout(() => {
-        setGamePhase('betting');
-        setBets({});
-        setWinningAnimals([]);
-        if (secretMode) {
-          // Secret mode only lasts one round
-          setSecretMode(false);
-        }
-      }, 3000);
     }, 2000);
   };
 
   const resetGame = () => {
-    setCoins(10000);
-    setBets({});
-    setGamePhase('betting');
-    setWinningAnimals([]);
-    setSecretMode(false);
+    setGamePhase('ready');
+    setTapControlActive(false);
     setTapSequence([]);
+    setWaitingForTap(false);
+    setDiceResults([
+      { face: 'crab', animating: false },
+      { face: 'fish', animating: false },
+      { face: 'shrimp', animating: false }
+    ]);
   };
 
   return (
     <div 
       ref={gameAreaRef}
-      onClick={handleSecretTap}
       className="min-h-screen bg-gradient-to-br from-game-blue via-blue-800 to-blue-900 relative overflow-hidden"
       style={{
         backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
@@ -257,30 +184,34 @@ const BauCuaGame: React.FC = () => {
           <h1 className="text-2xl font-bold text-white drop-shadow-lg">
             Bầu Cua VNG 2024-2025
           </h1>
-          {secretMode && (
+          {tapControlActive && (
             <div className="text-xs text-yellow-300 animate-pulse">
-              ⭐ Chế độ may mắn đang hoạt động
+              🎮 Chế độ điều khiển đang hoạt động
+            </div>
+          )}
+          {waitingForTap && (
+            <div className="text-xs text-green-300 animate-pulse">
+              👆 Chờ chạm để chọn kết quả
             </div>
           )}
         </div>
         
         <div className="text-right">
           <div className="text-yellow-300 text-lg font-bold">
-            {coins.toLocaleString()} xu
+            Miễn phí
           </div>
         </div>
       </div>
 
-      {/* Top betting area */}
+      {/* Top animals area */}
       <div className="grid grid-cols-3 gap-4 p-4">
-        {animals.slice(0, 3).map((animal) => (
+        {animals.slice(0, 3).map((animal, index) => (
           <Card 
             key={animal.id}
             className={`p-4 bg-white/90 backdrop-blur-sm border-2 relative overflow-hidden
                        transition-all duration-300 hover:scale-105 cursor-pointer
-                       ${winningAnimals.includes(animal.id) ? 'border-yellow-400 animate-glow-pulse' : 'border-gray-300'}
-                       ${bets[animal.id] ? 'ring-2 ring-blue-400' : ''}`}
-            onClick={() => placeBet(animal.id, 100)}
+                       ${waitingForTap ? 'ring-2 ring-green-400' : 'border-gray-300'}`}
+            onClick={() => handleAnimalTap(index + 1)}
           >
             <div className="text-center">
               <img 
@@ -291,21 +222,14 @@ const BauCuaGame: React.FC = () => {
               <div className="text-sm font-semibold text-gray-800">
                 {animal.vietnamese}
               </div>
-              {bets[animal.id] && (
-                <div className="text-xs text-blue-600 font-bold mt-1">
-                  {bets[animal.id]} xu
-                </div>
-              )}
+              <div className="text-xs text-gray-500 mt-1">
+                Vị trí {index + 1}
+              </div>
             </div>
             
-            {/* Dice dots indicator */}
-            <div className="absolute top-2 right-2 grid grid-cols-3 gap-1">
-              {[1, 2, 3, 4, 5, 6].map((dot) => (
-                <div 
-                  key={dot}
-                  className="w-2 h-2 bg-blue-500 rounded-full"
-                />
-              ))}
+            {/* Position indicator */}
+            <div className="absolute top-2 right-2 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+              {index + 1}
             </div>
           </Card>
         ))}
@@ -337,7 +261,7 @@ const BauCuaGame: React.FC = () => {
           
           {/* Roll button */}
           <div className="absolute -bottom-16 left-1/2 transform -translate-x-1/2">
-            {gamePhase === 'betting' ? (
+            {gamePhase === 'ready' ? (
               <Button 
                 onClick={rollDice}
                 size="lg"
@@ -353,7 +277,7 @@ const BauCuaGame: React.FC = () => {
                 size="lg"
                 className="bg-gray-500 text-white font-bold px-8 py-4 rounded-full"
               >
-                ĐANG LẮC...
+                {waitingForTap ? 'CHỜ CHẠM' : 'ĐANG LẮC...'}
               </Button>
             ) : (
               <Button 
@@ -368,16 +292,15 @@ const BauCuaGame: React.FC = () => {
         </div>
       </div>
 
-      {/* Bottom betting area */}
+      {/* Bottom animals area */}
       <div className="grid grid-cols-3 gap-4 p-4 mt-16">
-        {animals.slice(3, 6).map((animal) => (
+        {animals.slice(3, 6).map((animal, index) => (
           <Card 
             key={animal.id}
             className={`p-4 bg-white/90 backdrop-blur-sm border-2 relative overflow-hidden
                        transition-all duration-300 hover:scale-105 cursor-pointer
-                       ${winningAnimals.includes(animal.id) ? 'border-yellow-400 animate-glow-pulse' : 'border-gray-300'}
-                       ${bets[animal.id] ? 'ring-2 ring-blue-400' : ''}`}
-            onClick={() => placeBet(animal.id, 100)}
+                       ${waitingForTap ? 'ring-2 ring-green-400' : 'border-gray-300'}`}
+            onClick={() => handleAnimalTap(index + 4)}
           >
             <div className="text-center">
               <img 
@@ -388,28 +311,34 @@ const BauCuaGame: React.FC = () => {
               <div className="text-sm font-semibold text-gray-800">
                 {animal.vietnamese}
               </div>
-              {bets[animal.id] && (
-                <div className="text-xs text-blue-600 font-bold mt-1">
-                  {bets[animal.id]} xu
-                </div>
-              )}
+              <div className="text-xs text-gray-500 mt-1">
+                Vị trí {index + 4}
+              </div>
             </div>
             
-            {/* Dice dots indicator */}
-            <div className="absolute top-2 right-2 grid grid-cols-3 gap-1">
-              {[1, 2, 3, 4, 5, 6].map((dot) => (
-                <div 
-                  key={dot}
-                  className="w-2 h-2 bg-blue-500 rounded-full"
-                />
-              ))}
+            {/* Position indicator */}
+            <div className="absolute top-2 right-2 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+              {index + 4}
             </div>
           </Card>
         ))}
       </div>
 
-      {/* Bottom branding */}
+      {/* Instructions */}
       <div className="text-center py-4 bg-black/20 backdrop-blur-sm mt-8">
+        <div className="text-yellow-300 text-sm font-bold mb-2">
+          HƯỚNG DẪN KÍCH HOẠT ĐIỀU KHIỂN
+        </div>
+        <div className="text-white text-xs">
+          Chạm theo thứ tự: Vị trí 2 → 1 → 6 → 1
+        </div>
+        <div className="text-gray-300 text-xs mt-1">
+          Vị trí 1: Cua cố định | Vị trí 2: Cá cố định | Vị trí 6: Bầu cố định
+        </div>
+      </div>
+
+      {/* Bottom branding */}
+      <div className="text-center py-4 bg-black/20 backdrop-blur-sm">
         <div className="text-yellow-300 text-xl font-bold">XÓC ĐĨA</div>
         <div className="text-white text-sm">V.N.G : 12092-5021</div>
       </div>
